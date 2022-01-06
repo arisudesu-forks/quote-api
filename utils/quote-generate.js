@@ -1,7 +1,7 @@
 const fs = require('fs')
 const { createCanvas, registerFont } = require('canvas')
 const EmojiDbLib = require('emoji-db')
-const loadCanvasImage = require('./canvas-image-load')
+const { loadImage } = require('canvas')
 const loadImageFromUrl = require('./image-load-url')
 const sharp = require('sharp')
 const Jimp = require('jimp')
@@ -97,7 +97,7 @@ class QuoteGenerate {
     if (avatarImageCache) {
       avatarImage = avatarImageCache
     } else if (user.photo && user.photo.url) {
-      avatarImage = await loadCanvasImage(user.photo.url)
+      avatarImage = await loadImage(user.photo.url)
     } else {
       try {
         let userPhoto, userPhotoUrl
@@ -110,14 +110,14 @@ class QuoteGenerate {
 
           if (userPhoto) userPhotoUrl = await this.telegram.getFileLink(userPhoto)
           else if (user.username) userPhotoUrl = `https://telega.one/i/userpic/320/${user.username}.jpg`
-          else avatarImage = await loadCanvasImage(await this.avatarImageLatters(nameLatters, avatarColor))
+          else avatarImage = await loadImage(await this.avatarImageLatters(nameLatters, avatarColor))
         }
 
-        if (userPhotoUrl) avatarImage = await loadCanvasImage(userPhotoUrl)
+        if (userPhotoUrl) avatarImage = await loadImage(userPhotoUrl)
 
         avatarCache.set(cacheKey, avatarImage)
       } catch (error) {
-        avatarImage = await loadCanvasImage(await this.avatarImageLatters(nameLatters, avatarColor))
+        avatarImage = await loadImage(await this.avatarImageLatters(nameLatters, avatarColor))
       }
     }
 
@@ -146,7 +146,7 @@ class QuoteGenerate {
       animation.goToAndStop(middleFrame, true)
 
       return canvas
-    } else if (crop) {
+    } else if (crop || mediaUrl.match(/.webp/)) {
       const imageSharp = sharp(load)
       const imageMetadata = await imageSharp.metadata()
       const sharpPng = await imageSharp.png({ lossless: true, force: true }).toBuffer()
@@ -165,10 +165,17 @@ class QuoteGenerate {
         croppedImage = await imageSharp.png({ lossless: true, force: true }).toBuffer()
       }
 
-      return loadCanvasImage(croppedImage)
+      return loadImage(croppedImage)
     } else {
-      return loadCanvasImage(load)
+      return loadImage(load)
     }
+  }
+
+  hexToRgb (hex) {
+    return hex.replace(/^#?([a-f\d])([a-f\d])([a-f\d])$/i
+      , (m, r, g, b) => '#' + r + r + g + g + b + b)
+      .substring(1).match(/.{2}/g)
+      .map(x => parseInt(x, 16))
   }
 
   // https://codepen.io/andreaswik/pen/YjJqpK
@@ -243,14 +250,16 @@ class QuoteGenerate {
         const entity = entities[entityIndex]
         const style = []
 
-        if (entity.type === 'bold') style.push('bold')
-        if (entity.type === 'italic') style.push('italic')
-        if (entity.type === 'strikethrough') style.push('strikethrough')
-        if (entity.type === 'underline') style.push('underline')
         if (['pre', 'code'].includes(entity.type)) {
           style.push('monospace')
+        } else if (
+          ['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link']
+            .includes(entity.type)
+        ) {
+          style.push('mention')
+        } else {
+          style.push(entity.type)
         }
-        if (['mention', 'text_mention', 'hashtag', 'email', 'phone_number', 'bot_command', 'url', 'text_link'].includes(entity.type)) style.push('mention')
 
         for (let charIndex = entity.offset; charIndex < entity.offset + entity.length; charIndex++) {
           styledChar[charIndex].style = styledChar[charIndex].style.concat(style)
@@ -321,13 +330,13 @@ class QuoteGenerate {
 
       if (styledWord.emoji) {
         if (emojiImageJson && emojiImageJson[styledWord.emoji.code]) {
-          emojiImage = await loadCanvasImage(Buffer.from(emojiImageJson[styledWord.emoji.code], 'base64'))
+          emojiImage = await loadImage(Buffer.from(emojiImageJson[styledWord.emoji.code], 'base64'))
         } else {
           const emojiDataDir = 'assets/emojis/'
           const emojiPng = `${emojiDataDir}${styledWord.emoji.code}.png`
 
           try {
-            emojiImage = await loadCanvasImage(emojiPng)
+            emojiImage = await loadImage(emojiPng)
           } catch (error) {
           }
         }
@@ -349,6 +358,10 @@ class QuoteGenerate {
       }
       if (styledWord.style.includes('mention')) {
         fillStyle = '#6ab7ec'
+      }
+      if (styledWord.style.includes('spoiler')) {
+        const rbaColor = this.hexToRgb(this.normalizeColor(fontColor))
+        fillStyle = `rgba(${rbaColor[0]}, ${rbaColor[1]}, ${rbaColor[2]}, 0.1)`
       }
       // else {
       //   canvasCtx.font = `${fontSize}px OpenSans`
@@ -599,8 +612,8 @@ class QuoteGenerate {
       replyNamePosY = namePosY + replyNameHeight
       replyTextPosY = replyNamePosY + replyTextHeight
 
-      textPosY += replyNameHeight + replyTextHeight
-      height += replyNameHeight + replyTextHeight
+      textPosY += replyNameHeight + replyTextHeight + (indent / 2)
+      height += replyNameHeight + replyTextHeight + (indent / 2)
     }
 
     let mediaPosX = 0
@@ -666,7 +679,7 @@ class QuoteGenerate {
       const backStyle = this.lightOrDark(backgroundColor)
       let lineColor = '#fff'
       if (backStyle === 'light') lineColor = '#000'
-      canvasCtx.drawImage(this.deawReplyLine(3 * scale, replyName.height + replyText.height * 0.4, lineColor), textPosX, replyNamePosY)
+      canvasCtx.drawImage(this.deawReplyLine(3 * scale, replyName.height + replyText.height * 0.4, lineColor), textPosX - 7, replyNamePosY)
 
       canvasCtx.drawImage(replyName, replyPosX, replyNamePosY)
       canvasCtx.drawImage(replyText, replyPosX, replyTextPosY)
@@ -780,16 +793,15 @@ class QuoteGenerate {
       if (backStyle === 'light') textColor = '#000'
 
       const replyTextFontSize = 21 * scale
-      replyText = await this.drawMultilineText(message.replyMessage.text, null, replyTextFontSize, textColor, 0, replyTextFontSize, width * 0.9, replyTextFontSize)
+      replyText = await this.drawMultilineText(message.replyMessage.text, message.replyMessage.entities, replyTextFontSize, textColor, 0, replyTextFontSize, width * 0.9, replyTextFontSize)
     }
 
     let mediaCanvas, mediaType, maxMediaSize
     if (message.media) {
       let media, type
 
-      let crop = true
-      if (message.media.crop) crop = message.media
-      else if (scale > 2) crop = false
+      let crop = false
+      if (message.mediaCrop) crop = true
 
       if (message.media.url) {
         type = 'url'
