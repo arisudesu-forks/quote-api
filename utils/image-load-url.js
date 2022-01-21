@@ -1,8 +1,12 @@
 const https = require('https')
 
-module.exports = (url) => {
+module.exports = (url, filter = false) => {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
+      if (filter && filter(res.headers)) {
+        resolve(Buffer.concat([]))
+      }
+
       const chunks = []
 
       res.on('error', (err) => {
