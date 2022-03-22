@@ -361,7 +361,7 @@ class QuoteGenerate {
       }
 
       let fontType = ''
-      let fontName = 'NotoSans'
+      let fontName = 'OpenSans'
       let fillStyle = fontColor
 
       if (styledWord.style.includes('bold')) {
