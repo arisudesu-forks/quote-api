@@ -7,9 +7,9 @@ const sharp = require('sharp')
 const Jimp = require('jimp')
 const smartcrop = require('smartcrop-sharp')
 const runes = require('runes')
-const lottie = require('lottie-node')
 const zlib = require('zlib')
 const { Telegram } = require('telegraf')
+const { render } = require('../helpers/rlottie')
 
 const emojiDb = new EmojiDbLib({ useDefaultDb: true })
 
@@ -151,12 +151,7 @@ class QuoteGenerate {
     const load = await loadImageFromUrl(mediaUrl)
     if (mediaUrl.match(/.tgs/)) {
       const jsonLottie = await this.ungzip(load)
-      const canvas = createCanvas(512, 512)
-      const animation = lottie(JSON.parse(jsonLottie.toString()), canvas)
-      const middleFrame = Math.floor(animation.getDuration(true) / 2)
-      animation.goToAndStop(middleFrame, true)
-
-      return canvas
+      return render(jsonLottie.toString(), 512, 512, 0.5)
     } else if (crop || mediaUrl.match(/.webp/)) {
       const imageSharp = sharp(load)
       const imageMetadata = await imageSharp.metadata()
