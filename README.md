@@ -104,14 +104,14 @@ POST /generate
     {
       "entities": [],
       "media": {
-        "url": "https://via.placeholder.com/1000"
+        "url": "https://placehold.co/1000"
       },
       "avatar": true,
       "from": {
         "id": 1,
         "name": "Mike",
         "photo": {
-          "url": "https://via.placeholder.com/100"
+          "url": "https://placehold.co/100"
         }
       },
       "text": "Hey",
